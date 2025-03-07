@@ -4,6 +4,8 @@ import java.io.*;
 import java.nio.file.*;
 import java.util.*;
 import java.util.regex.*;
+import java.net.ServerSocket;
+import java.net.Socket;
 
 /**
  * This class implements the DB server.
@@ -46,10 +48,10 @@ public class DBServer {
         }
         // 去掉首尾空白并去掉末尾分号（若存在）
         command = command.trim();
-        if(command.endsWith(";")) {
-            command = command.substring(0, command.length()-1).trim();
+        if(!command.endsWith(";")) {
+            return "[ERROR] Semicolon is missing at the line of end";
         }
-
+        command = command.substring(0, command.length() - 1).trim();
         // 尝试解析和执行
         String result;
         try {
@@ -90,7 +92,7 @@ public class DBServer {
 
         // 3) CREATE TABLE <tableName> (columns)  或 CREATE TABLE <tableName>
         Pattern createTableWithColsPattern = Pattern.compile(
-            "(?i)^CREATE\\s+TABLE\\s+([A-Za-z0-9]+)\\s*\\((.*)\\)$"
+                "(?i)^CREATE\\s+TABLE\\s+([A-Za-z0-9]+)\\s*\\((.*)\\)$"
         );
         Matcher createTableWithColsMatcher = createTableWithColsPattern.matcher(cmd);
         if(createTableWithColsMatcher.find()) {
@@ -209,7 +211,7 @@ public class DBServer {
         // 创建文件夹
         File dbFolder = new File(storageFolderPath, dbNameLower);
         if(dbFolder.exists()) {
-            return "[ERROR] Folder already exists (dbName conflict): " + dbName;
+            return "[ERROR] Folder already exists: " + dbName;
         }
         boolean success = dbFolder.mkdir();
         if(!success) {
@@ -311,7 +313,7 @@ public class DBServer {
         }
         Table table = db.getTable(tableName);
         if(table == null) {
-            return "[ERROR] Table not found: " + tableName;
+            return "[ERROR] Table does not exist: " + tableName;
         }
 
         String colNameLower = colName.toLowerCase();
@@ -409,6 +411,10 @@ public class DBServer {
         }
         // 找到where条件匹配的行
         List<Row> matchedRows = table.filterRows(wherePart);
+
+        if(matchedRows.isEmpty()) {
+            return "[ERROR] Attribute does not exist" ;
+        }
 
         // 构造结果字符串
         StringBuilder sb = new StringBuilder("[OK]\n");
@@ -528,13 +534,13 @@ public class DBServer {
                         String cName = t1.getColumns().get(i);
                         String val = r1.getValue(cName.toLowerCase());
                         // 加名的时候 => tableName.colName
-                        joined.values.put(t1.getName().toLowerCase()+"."+cName.toLowerCase(), val);
+                        joined.values.put(t1.name.toLowerCase()+"."+cName.toLowerCase(), val); // Corrected here
                     }
                     // 把 t2 的除 id 外的列都加进来
                     for(int i=1; i<t2.getColumns().size(); i++){
                         String cName = t2.getColumns().get(i);
                         String val = r2.getValue(cName.toLowerCase());
-                        joined.values.put(t2.getName().toLowerCase()+"."+cName.toLowerCase(), val);
+                        joined.values.put(t2.name.toLowerCase()+"."+cName.toLowerCase(), val); // Corrected here
                     }
                     resultRows.add(joined);
                 }
@@ -546,11 +552,11 @@ public class DBServer {
         List<String> joinedCols = new ArrayList<>();
         joinedCols.add("id");
         for(int i=1; i<t1.getColumns().size(); i++){
-            String cc = t1.getName()+"."+t1.getColumns().get(i);
+            String cc = t1.name+"."+t1.getColumns().get(i); // Corrected here
             joinedCols.add(cc);
         }
         for(int i=1; i<t2.getColumns().size(); i++){
-            String cc = t2.getName()+"."+t2.getColumns().get(i);
+            String cc = t2.name+"."+t2.getColumns().get(i); // Corrected here
             joinedCols.add(cc);
         }
 
@@ -577,14 +583,15 @@ public class DBServer {
         return sb.toString().trim();
     }
 
+
     // =============== 工具函数 ===============
 
     private boolean isReservedKeyword(String word) {
         // 简单举例，实际上你可以把 BNF 里用到的关键字都列进来
         String[] keywords = {
-            "SELECT","FROM","WHERE","AND","OR","UPDATE","SET","DELETE",
-            "INSERT","INTO","VALUES","CREATE","TABLE","DATABASE","DROP",
-            "ALTER","JOIN","USE","TRUE","FALSE","LIKE","NULL"
+                "SELECT","FROM","WHERE","AND","OR","UPDATE","SET","DELETE",
+                "INSERT","INTO","VALUES","CREATE","TABLE","DATABASE","DROP",
+                "ALTER","JOIN","USE","TRUE","FALSE","LIKE","NULL"
         };
         for(String k : keywords){
             if(k.equalsIgnoreCase(word)){
@@ -807,7 +814,7 @@ public class DBServer {
                     table = new Table(tName, columns, false); // false表示不自动附加id列
                     String line;
                     while((line = br.readLine()) != null) {
-                        String[] parts = line.split("\t", -1); 
+                        String[] parts = line.split("\t", -1);
                         if(parts.length != columns.size()) {
                             // 格式不对
                             throw new IOException("Row column count mismatch");
@@ -841,6 +848,7 @@ public class DBServer {
         private final List<String> columns; // 例如 [id, name, mark, pass]
         private final List<Row> rows;       // 行
         private int nextId = 1;            // 用于分配下一个可用id
+
 
         // 新建时(带列名)
         Table(String name, List<String> userDefinedColumns) {
@@ -978,6 +986,7 @@ public class DBServer {
                 return 0f;
             }
         }
+
     }
 
     /**
