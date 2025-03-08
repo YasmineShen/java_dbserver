@@ -20,7 +20,7 @@ public class DBServer {
     private String currentDatabaseName = null;
 
     // 存放所有数据库的父目录
-    private String storageFolderPath;
+    private final String storageFolderPath;
 
     /**
      * KEEP this signature otherwise we won't be able to mark your submission correctly.
@@ -297,7 +297,10 @@ public class DBServer {
         db.tables.remove(tableNameLower);
         File tableFile = new File(new File(storageFolderPath, currentDatabaseName), tableNameLower + ".tab");
         if(tableFile.exists()) {
-            tableFile.delete();
+            boolean deleted = tableFile.delete();
+            if(!deleted){
+                return "[ERROR] Failed to delete table: " + tableName;
+            }
         }
         return "[OK]";
     }
@@ -612,6 +615,7 @@ public class DBServer {
             }
         }
         file.delete();
+
     }
 
     // 解析形如: col1, col2, col3
@@ -704,7 +708,7 @@ public class DBServer {
 
     //  === Methods below handle networking aspects - DO NOT change them ! ===
 
-    public static void main(String args[]) throws IOException {
+    public static void main(String[] args) throws IOException {
         DBServer server = new DBServer();
         server.blockingListenOn(8888);
     }
